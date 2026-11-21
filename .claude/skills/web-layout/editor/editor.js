@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { buildIntent, countChanges, countLayoutHints, hasDraft, validateForSubmit } from './state.js';
+import { buildIntent, countChanges, countLayoutHints, demoteModule, hasDraft, promoteModule, validateForSubmit } from './state.js';
 import { renderInspector as renderInspectorView } from './inspector.js';
 import { PALETTE } from './runtime/constants.js';
 
@@ -28,6 +28,7 @@ const app = {
   layoutHints: {},
   globalNote: '',
   selectedId: '',
+  candidate: null,
   unresolved: [],
   stale: false,
   submitted: false,
@@ -101,6 +102,31 @@ function postToFrame(message) {
   frame.contentWindow.postMessage(message, app.state.previewOrigin);
 }
 
+app.onPromote = async (candidate) => {
+  try {
+    const next = promoteModule(app.effectiveManifest, candidate);
+    const saved = await api('/api/manifest?page=' + encodeURIComponent(app.state.page), { method: 'PUT', body: { manifest: next } });
+    app.effectiveManifest = saved;
+    app.candidate = null;
+    postToFrame({ type: 'manifest', manifest: saved, runtimeToken: app.state.runtimeToken, sourceVersion: app.state.sourceVersion, styleVersion: app.state.styleVersion });
+    renderInspector();
+  } catch (error) {
+    setBanners([{ text: '提升失败：' + error.message, error: true }]);
+  }
+};
+
+app.onDemote = async (id) => {
+  try {
+    const next = demoteModule(app.effectiveManifest, id);
+    const saved = await api('/api/manifest?page=' + encodeURIComponent(app.state.page), { method: 'PUT', body: { manifest: next } });
+    app.effectiveManifest = saved;
+    postToFrame({ type: 'manifest', manifest: saved, runtimeToken: app.state.runtimeToken, sourceVersion: app.state.sourceVersion, styleVersion: app.state.styleVersion });
+    renderInspector();
+  } catch (error) {
+    setBanners([{ text: '降级失败：' + error.message, error: true }]);
+  }
+};
+
 function previewUrlFor(page) {
   return app.state.previewOrigin + '/' + page.split('/').map(encodeURIComponent).join('/');
 }
@@ -125,6 +151,7 @@ async function loadPage(page) {
   app.layoutHints = {};
   app.globalNote = '';
   app.selectedId = '';
+  app.candidate = null;
   app.unresolved = [];
   app.stale = state.manifestStatus === 'stale';
   app.submitted = false;
@@ -214,6 +241,10 @@ window.addEventListener('message', (event) => {
   }
   if (data.type === 'select') {
     app.selectedId = data.id || '';
+    renderInspector();
+  }
+  if (data.type === 'candidate' && data.candidate) {
+    app.candidate = data.candidate;
     renderInspector();
   }
   if (data.type === 'error') {

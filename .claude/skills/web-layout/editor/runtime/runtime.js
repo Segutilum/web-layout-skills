@@ -1,4 +1,4 @@
-import { buildTree, heuristicManifest, serializeRoot } from './dom.js';
+import { buildTree, candidateForElement, heuristicManifest, serializeRoot } from './dom.js';
 import { createDragController } from './drag.js';
 import { createOverlay } from './overlay.js';
 import { attachPaletteDrop } from './palette-drop.js';
@@ -118,6 +118,8 @@ function boot(config) {
   });
 
   document.addEventListener('click', (event) => {
+    // Alt+click belongs to the candidate path below, never to selection.
+    if (event.altKey) return;
     const target = event.target;
     if (!target || !target.closest) return;
     const el = target.closest('[data-web-layout-id]');
@@ -127,6 +129,18 @@ function boot(config) {
     selected = el.getAttribute('data-web-layout-id');
     overlay.setSelected(selected);
     post({ type: 'select', id: selected });
+  }, true);
+
+  document.addEventListener('click', (event) => {
+    if (!event.altKey) return;
+    const target = event.target;
+    if (!target || !target.closest) return;
+    const containing = target.closest('[data-web-layout-id]');
+    if (!containing) return;
+    if (target === containing) return;
+    event.preventDefault();
+    event.stopPropagation();
+    post({ type: 'candidate', candidate: candidateForElement(target, tree) });
   }, true);
 
   const relayout = () => overlay.layout(tree);

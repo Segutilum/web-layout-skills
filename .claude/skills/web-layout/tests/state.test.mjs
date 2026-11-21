@@ -10,6 +10,8 @@ import {
   buildIntent,
   moduleIndex,
   findParent,
+  promoteModule,
+  demoteModule,
 } from '../editor/state.js';
 
 const manifest = {
@@ -166,4 +168,32 @@ test('moduleIndex and findParent walk the manifest and tree', () => {
   assert.equal(index.get('hero-title').ref, 'section.hero h2');
   assert.equal(findParent(tree, 'hero-title').id, 'hero');
   assert.equal(findParent(tree, '__root__'), null);
+});
+
+test('promoteModule inserts a candidate under its parent', () => {
+  const base = {
+    schema: 1, page: 'index.html', modules: [
+      { id: 'hero', role: 'hero', label: 'Hero', ref: 'section.hero', classes: 'hero', container: true, layout: 'column', children: [] },
+    ],
+  };
+  const candidate = {
+    id: 'hero-kicker', role: 'paragraph', label: 'Kicker', ref: 'section.hero .kicker',
+    tag: 'p', classes: 'kicker', text: 'New', fingerprint: 'p|kicker|New',
+    container: false, layout: 'flow', parentId: 'hero',
+  };
+  const next = promoteModule(base, candidate);
+  assert.equal(next.modules[0].children.length, 1);
+  assert.equal(next.modules[0].children[0].id, 'hero-kicker');
+});
+
+test('demoteModule moves children up and removes the wrapper', () => {
+  const base = {
+    schema: 1, page: 'index.html', modules: [
+      { id: 'hero', role: 'hero', label: 'Hero', ref: 'section.hero', classes: 'hero', container: true, layout: 'column', children: [
+        { id: 'hero-title', role: 'heading', label: 'Title', ref: 'section.hero h2', classes: '', container: false, layout: 'flow' },
+      ] },
+    ],
+  };
+  const next = demoteModule(base, 'hero');
+  assert.deepEqual(next.modules.map((m) => m.id), ['hero-title']);
 });

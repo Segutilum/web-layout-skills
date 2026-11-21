@@ -89,6 +89,66 @@ function intentTree(nodes) {
   }));
 }
 
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+export function promoteModule(manifest, candidate) {
+  if (!candidate || !candidate.id) throw new Error('candidate id required');
+  const next = clone(manifest || { modules: [] });
+  const parentId = candidate.parentId || '__root__';
+  const module = {
+    id: candidate.id,
+    role: candidate.role || 'block',
+    label: candidate.label || candidate.id,
+    ref: candidate.ref,
+    matchIndex: 0,
+    tag: candidate.tag || 'div',
+    classes: candidate.classes || '',
+    text: candidate.text || '',
+    fingerprint: candidate.fingerprint || '',
+    container: Boolean(candidate.container),
+    layout: candidate.layout || 'flow',
+    ...(candidate.container ? { children: [] } : {}),
+  };
+  if (parentId === '__root__') {
+    next.modules.push(module);
+    return next;
+  }
+  const walk = (modules) => {
+    for (const mod of modules || []) {
+      if (mod.id === parentId) {
+        if (!mod.container) throw new Error('parent is not a container');
+        mod.children = mod.children || [];
+        mod.children.push(module);
+        return true;
+      }
+      if (walk(mod.children)) return true;
+    }
+    return false;
+  };
+  if (!walk(next.modules)) throw new Error('parent not found: ' + parentId);
+  return next;
+}
+
+export function demoteModule(manifest, id) {
+  const next = clone(manifest || { modules: [] });
+  const detach = (modules) => {
+    for (let i = 0; i < (modules || []).length; i += 1) {
+      const mod = modules[i];
+      if (mod.id === id) {
+        const children = mod.children || [];
+        modules.splice(i, 1, ...children);
+        return true;
+      }
+      if (detach(mod.children)) return true;
+    }
+    return false;
+  };
+  if (!detach(next.modules)) throw new Error('module not found: ' + id);
+  return next;
+}
+
 export function buildIntent(state) {
   const manifest = state.manifest || state.effectiveManifest || { modules: [] };
   const index = moduleIndex(manifest);

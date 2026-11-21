@@ -1,4 +1,4 @@
-import { textPreview, fingerprintOf, segment } from './model.js';
+import { textPreview, fingerprintOf, roleOf, layoutOf, segment } from './model.js';
 import { CONTAINER_TYPES } from './constants.js';
 
 const SKIP = new Set(['SCRIPT', 'STYLE', 'LINK', 'META', 'TEMPLATE', 'NOSCRIPT', 'BR']);
@@ -176,4 +176,74 @@ export function serializeTree(nodes) {
 
 export function serializeRoot(nodes) {
   return [{ id: '__root__', children: serializeTree(nodes) }];
+}
+
+function classFirst(className) {
+  return String(className || '').split(/\s+/).filter(Boolean)[0] || '';
+}
+
+function collectIds(nodes, out = new Set()) {
+  for (const node of nodes || []) {
+    if (node && node.id) out.add(node.id);
+    if (node && node.children) collectIds(node.children, out);
+  }
+  return out;
+}
+
+function containsElement(nodes, el) {
+  for (const node of nodes || []) {
+    if (!node) continue;
+    if (node.el === el) return true;
+    if (node.children && containsElement(node.children, el)) return true;
+  }
+  return false;
+}
+
+function uniqueId(base, ids) {
+  let id = base;
+  let suffix = 2;
+  while (ids.has(id)) {
+    id = base + '-' + suffix;
+    suffix += 1;
+  }
+  return id;
+}
+
+/**
+ * Describe a non-module descendant element as a promotable module candidate.
+ *
+ * Returns null for an element that is already a registered tree node, so an
+ * existing module can never be promoted twice, and suffixes the derived id
+ * until it is unique within the tree.
+ */
+export function candidateForElement(el, tree) {
+  if (!el || !el.closest) return null;
+  if (containsElement(tree, el)) return null;
+  const containing = el.closest('[data-web-layout-id]');
+  const parentId = containing ? containing.getAttribute('data-web-layout-id') : '__root__';
+  const tag = el.tagName.toLowerCase();
+  const classes = typeof el.className === 'string' ? el.className : '';
+  const text = textPreview(el.textContent || '');
+  const role = roleOf({ tag, className: classes });
+  const layout = layoutOf({
+    display: getComputedStyle(el).display,
+    flexDirection: getComputedStyle(el).flexDirection,
+    gridTemplateColumns: getComputedStyle(el).gridTemplateColumns,
+  });
+  const raw = el.getAttribute('data-module') || el.id || classFirst(classes) || (role + '-' + tag);
+  const base = String(raw).toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || ('promoted-' + Date.now());
+  const id = uniqueId(base, collectIds(tree));
+  return {
+    id,
+    role,
+    label: text || id,
+    ref: buildRef(el),
+    tag,
+    classes,
+    text,
+    fingerprint: fingerprintOf({ tag, className: classes, text }),
+    container: layout !== 'flow' || el.children.length >= 2,
+    layout,
+    parentId,
+  };
 }
