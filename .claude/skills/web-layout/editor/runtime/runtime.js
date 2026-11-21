@@ -1,6 +1,7 @@
 import { buildTree, heuristicManifest, serializeRoot } from './dom.js';
 import { createDragController } from './drag.js';
 import { createOverlay } from './overlay.js';
+import { attachPaletteDrop } from './palette-drop.js';
 
 const config = window.__WEB_LAYOUT__;
 if (config) boot(config);
@@ -70,6 +71,24 @@ function boot(config) {
     onMoved: (item) => {
       moved = moved.filter((existing) => existing.module !== item.module);
       moved.push(item);
+    },
+  });
+
+  const paletteDrop = attachPaletteDrop({
+    document,
+    window,
+    getTree: () => tree,
+    editorOrigin,
+    runtimeToken,
+    onAdd: (item) => {
+      added.set(item.id, item);
+      build();
+      sendTree();
+    },
+    onRemove: (id) => {
+      removed.add(id);
+      build();
+      sendTree();
     },
   });
 

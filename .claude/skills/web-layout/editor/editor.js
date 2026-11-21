@@ -65,6 +65,11 @@ function renderPalette() {
       event.dataTransfer.setData('application/x-web-layout-module', item.type);
       event.dataTransfer.effectAllowed = 'copy';
     });
+    el.addEventListener('click', () => {
+      if (!app.state) return;
+      postToFrame({ type: 'insertMode', value: item.type, runtimeToken: app.state.runtimeToken });
+      setBanners([{ text: '点击预览里的位置来插入「' + item.label + '」' }]);
+    });
     ui.palette.appendChild(el);
   }
 }
