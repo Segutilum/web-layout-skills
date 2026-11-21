@@ -1,0 +1,15 @@
+# Local Claude Code settings (may contain API tokens)
+.claude/settings.local.json
+
+# Skill runtime sidecars
+.web-layout/
+
+# SDD scratch workspace
+.superpowers/
+
+# Dependencies
+node_modules/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db

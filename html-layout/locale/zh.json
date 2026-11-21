@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "HTML 布局编辑器",
+    "description": "在右侧栏拖动调整 HTML 页面的区块顺序，然后让 agent 按新顺序改写结构与 CSS。",
+    "detail": "docs/DETAIL.md"
+  }
+}

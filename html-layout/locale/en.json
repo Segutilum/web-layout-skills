@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "HTML layout editor",
+    "description": "Reorder an HTML page's blocks by dragging in the right Sidebar, then have the agent rewrite the markup and CSS to match.",
+    "detail": "docs/DETAIL.md"
+  }
+}

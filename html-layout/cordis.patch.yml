@@ -1,0 +1,3 @@
+- insert:
+    - id: html-layout
+      name: '@local/dsh-html-layout'
