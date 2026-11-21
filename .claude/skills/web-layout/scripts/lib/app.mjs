@@ -98,7 +98,7 @@ export async function createApp({ root, page = '', editorPort = 0, previewPort =
   editorOrigin = 'http://127.0.0.1:' + p1;
   previewOrigin = 'http://127.0.0.1:' + p2;
   const encodedPage = String(page || '').split('/').map(encodeURIComponent).join('/');
-  const editorUrl = editorOrigin + '/?page=' + encodeURIComponent(encodedPage) + '#token=' + config.editorToken;
+  const editorUrl = editorOrigin + '/?page=' + encodeURIComponent(String(page || '')) + '#token=' + config.editorToken;
   const previewUrl = previewOrigin + (encodedPage ? '/' + encodedPage : '/');
 
   if (idleMinutes > 0) {

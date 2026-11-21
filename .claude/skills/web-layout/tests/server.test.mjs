@@ -122,6 +122,18 @@ test('editor file server serves runtime assets', async () => {
   }
 });
 
+test('editor and preview URLs preserve page names', async () => {
+  const root = await fixture();
+  await fs.writeFile(path.join(root, 'my page.html'), '<!doctype html><html><body><p>Space</p></body></html>');
+  const app = await createApp({ root, page: 'my page.html', editorPort: 0, previewPort: 0, idleMinutes: 0 });
+  try {
+    assert.equal(new URL(app.editorUrl).searchParams.get('page'), 'my page.html');
+    assert.equal(new URL(app.previewUrl).pathname, '/my%20page.html');
+  } finally {
+    await app.close();
+  }
+});
+
 test('API guards reject a wrong origin and an invalid manifest', async () => {
   const root = await fixture();
   const app = await createApp({ root, page: 'index.html', editorPort: 0, previewPort: 0, idleMinutes: 0 });

@@ -9,6 +9,7 @@ function openBrowser(url) {
   const args = platform === 'win32' ? ['/c', 'start', '', url] : [url];
   try {
     const child = spawn(command, args, { detached: true, stdio: 'ignore' });
+    child.on('error', () => {});
     child.unref();
   } catch {
     /* the URL is still printed */
