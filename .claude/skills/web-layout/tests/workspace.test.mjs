@@ -88,7 +88,7 @@ test('submitIntent validates, fills context, and writes the intent', async () =>
   assert.equal(written.globalNote, 'Tighter');
 });
 
-test('submitIntent rejects stale versions and missing manifests', async () => {
+test('submitIntent rejects missing manifests with E_MANIFEST', async () => {
   const root = await fixture();
   const ws = createWorkspace({ root });
   const intent = {
@@ -97,11 +97,39 @@ test('submitIntent rejects stale versions and missing manifests', async () => {
     changes: { moved: [], added: [], removed: [] }, modules: [], tree: [{ id: '__root__', children: [] }],
   };
   await assert.rejects(() => ws.submitIntent(intent), (error) => error.code === 'E_MANIFEST');
+});
+
+test('submitIntent rejects stale manifests with E_STALE_SOURCE', async () => {
+  const root = await fixture();
+  const ws = createWorkspace({ root });
   const src = await sourceVersion(root, 'index.html');
   const style = await styleVersion(root, 'index.html');
-  await saveManifest(root, 'index.html', manifest(root, src), { sourceVersion: src });
+  const fakeSrc = 'sha256:' + 'f'.repeat(64);
+  assert.notEqual(fakeSrc, src);
+  await saveManifest(root, 'index.html', manifest(root, fakeSrc), { sourceVersion: fakeSrc });
+  const intent = {
+    schema: 1,
+    kind: 'web-layout-intent',
+    page: 'index.html',
+    sourceVersion: src,
+    styleVersion: style,
+    globalNote: 'Tighter',
+    changes: { moved: [{ module: 'hero', to: { parent: '__root__', index: 2 } }], added: [], removed: [] },
+    modules: [{ id: 'hero', ref: 'section.hero', note: 'Less padding' }],
+    tree: [{ id: '__root__', children: [
+      { id: 'site-header' }, { id: 'features' }, { id: 'hero' }, { id: 'site-footer' },
+    ] }],
+  };
+  await assert.rejects(() => ws.submitIntent(intent), (error) => error.code === 'E_STALE_SOURCE');
+});
+
+test('saveEditorManifest rejects stale manifests with E_STALE_SOURCE', async () => {
+  const root = await fixture();
+  const ws = createWorkspace({ root });
+  const fakeSrc = 'sha256:' + 'f'.repeat(64);
+  await saveManifest(root, 'index.html', manifest(root, fakeSrc), { sourceVersion: fakeSrc });
   await assert.rejects(
-    () => ws.submitIntent({ ...intent, sourceVersion: src, styleVersion: style }),
-    (error) => error.code === 'E_TREE_INVALID' || error.code === 'E_EMPTY_CHANGES' || error.code === 'E_STALE_SOURCE',
+    () => ws.saveEditorManifest('index.html', manifest(root, fakeSrc)),
+    (error) => error.code === 'E_STALE_SOURCE',
   );
 });
