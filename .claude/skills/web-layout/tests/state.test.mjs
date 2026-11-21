@@ -13,6 +13,7 @@ import {
   promoteModule,
   demoteModule,
 } from '../editor/state.js';
+import { validateManifest } from '../scripts/lib/manifest.mjs';
 
 const manifest = {
   schema: 1,
@@ -184,6 +185,25 @@ test('promoteModule inserts a candidate under its parent', () => {
   const next = promoteModule(base, candidate);
   assert.equal(next.modules[0].children.length, 1);
   assert.equal(next.modules[0].children[0].id, 'hero-kicker');
+});
+
+test('promoteModule caps the manifest label so the result validates', () => {
+  const base = {
+    schema: 1, page: 'index.html', sourceVersion: 'sha256:' + 'a'.repeat(64), stylesheets: [],
+    modules: [
+      { id: 'hero', role: 'hero', label: 'Hero', ref: 'section.hero', matchIndex: 0, tag: 'section', classes: 'hero', text: '', fingerprint: '', container: true, layout: 'column', children: [] },
+    ],
+  };
+  const candidate = {
+    id: 'hero-kicker', role: 'paragraph', label: 'L'.repeat(80), ref: 'section.hero p',
+    tag: 'p', classes: 'kicker', text: 'L'.repeat(80), fingerprint: 'p|kicker|' + 'L'.repeat(32),
+    container: false, layout: 'flow', parentId: 'hero',
+  };
+  const next = promoteModule(base, candidate);
+  const result = validateManifest(next);
+  assert.equal(result.ok, true, result.errors.join('; '));
+  assert.ok(next.modules[0].children[0].label.length <= 40);
+  assert.equal(candidate.label.length, 80);
 });
 
 test('demoteModule moves children up and removes the wrapper', () => {

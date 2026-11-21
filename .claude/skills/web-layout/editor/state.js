@@ -100,7 +100,7 @@ export function promoteModule(manifest, candidate) {
   const module = {
     id: candidate.id,
     role: candidate.role || 'block',
-    label: candidate.label || candidate.id,
+    label: String(candidate.label || candidate.id).slice(0, 40),
     ref: candidate.ref,
     matchIndex: 0,
     tag: candidate.tag || 'div',
