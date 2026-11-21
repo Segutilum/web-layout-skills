@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Web Layout</title>
+  <link rel="stylesheet" href="/editor.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="bar">
+      <label class="page-picker">页面 <select id="page-select"></select></label>
+      <div class="viewports" role="group" aria-label="视口">
+        <button type="button" data-width="1280" class="active">桌面</button>
+        <button type="button" data-width="834">平板</button>
+        <button type="button" data-width="390">手机</button>
+      </div>
+      <div id="banners" class="banners"></div>
+    </header>
+    <main class="workspace">
+      <aside id="palette" class="palette"></aside>
+      <section class="canvas">
+        <div id="frame-wrap" class="frame-wrap">
+          <iframe id="preview" sandbox="allow-scripts allow-same-origin allow-forms allow-modals" referrerpolicy="no-referrer" title="preview"></iframe>
+        </div>
+      </section>
+      <aside id="inspector" class="inspector"></aside>
+    </main>
+    <footer class="bar footer">
+      <span id="summary" class="summary"></span>
+      <button id="reset" type="button">重置</button>
+      <button id="continue" type="button" hidden>继续编辑</button>
+      <button id="submit" type="button" class="primary">完成</button>
+    </footer>
+  </div>
+  <script type="module" src="/editor.js"></script>
+</body>
+</html>

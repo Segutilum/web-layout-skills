@@ -1042,18 +1042,21 @@ function findNode(nodes, id) {
 function expandTree(tree, manifestIndex, added, removed) {
   const seen = new Set();
   const ids = [];
-  const explicit = new Set(['__root__']);
   const walk = (node) => {
     if (!node || typeof node.id !== 'string') return;
     if (seen.has(node.id)) throw fail('E_TREE_INVALID', 'duplicate module in tree: ' + node.id);
     seen.add(node.id);
-    ids.push(node.id);
-    if (node.children !== undefined) explicit.add(node.id);
+    if (node.id !== '__root__') ids.push(node.id);
     const children = node.children !== undefined
       ? node.children
       : (manifestIndex.get(node.id)?.children || []).map((child) => ({ id: child.id }));
     for (const child of children) {
-      if (removed.has(child.id)) continue;
+      if (removed.has(child.id)) {
+        if (node.children !== undefined) {
+          throw fail('E_TREE_INVALID', 'removed module listed in tree: ' + child.id);
+        }
+        continue;
+      }
       const parent = node.id;
       const isContainer = parent === '__root__'
         || manifestIndex.get(parent)?.container === true
@@ -1063,7 +1066,7 @@ function expandTree(tree, manifestIndex, added, removed) {
     }
   };
   for (const rootNode of tree) walk(rootNode);
-  return { ids, explicit };
+  return { ids };
 }
 
 export function validateIntent(intent, { manifest, sourceVersion, styleVersion }) {
@@ -1123,8 +1126,9 @@ export function validateIntent(intent, { manifest, sourceVersion, styleVersion }
   for (const id of actual) if (!expected.has(id)) add('E_TREE_INVALID', 'unexpected module in tree: ' + id);
 
   for (const id of removed) {
-    const parent = parentMap.get(id);
-    const node = findNode(intent.tree, parent);
+    let ancestor = parentMap.get(id);
+    while (removed.has(ancestor)) ancestor = parentMap.get(ancestor);
+    const node = findNode(intent.tree, ancestor);
     if (!node || node.children === undefined) add('E_TREE_INVALID', 'ancestor must be expanded for removed module: ' + id);
   }
   for (const item of movedArr) {
@@ -1146,8 +1150,11 @@ export function validateIntent(intent, { manifest, sourceVersion, styleVersion }
     if (mod.width !== undefined && !WIDTHS.has(mod.width)) add('E_TREE_INVALID', 'invalid width: ' + mod.id);
     if (mod.align !== undefined && !ALIGNS.has(mod.align)) add('E_TREE_INVALID', 'invalid align: ' + mod.id);
   }
+  for (const item of addedArr) {
+    if (typeof item.note === 'string' && item.note.length > 4000) add('E_TREE_INVALID', 'added note too long: ' + item.id);
+  }
   if (typeof intent.globalNote === 'string' && intent.globalNote.length > 8000) add('E_TREE_INVALID', 'globalNote too long');
-  if (JSON.stringify(intent).length > 2 * 1024 * 1024) add('E_TOO_LARGE', 'intent exceeds 2 MiB');
+  if (Buffer.byteLength(JSON.stringify(intent, null, 2), 'utf8') > 2 * 1024 * 1024) add('E_TOO_LARGE', 'intent exceeds 2 MiB');
 
   return errors.length ? { ok: false, errors } : { ok: true, errors: [] };
 }
@@ -1206,6 +1213,8 @@ Expected: PASS, 6 tests.
 git add .claude/skills/web-layout/editor/runtime/constants.js .claude/skills/web-layout/scripts/lib/intent.mjs .claude/skills/web-layout/tests/intent.test.mjs
 git commit -m "feat(web-layout): validate layout intents and warn on shared classes"
 ```
+
+> **Post-review amendment (commit `16da401`):** the committed `intent.mjs` also walks removed ancestors to the nearest surviving ancestor, applies the 4000-char limit to `changes.added[].note`, rejects a removed module explicitly listed in `children`, and measures the 2 MiB limit on pretty-printed UTF-8 bytes. `tests/intent.test.mjs` has 11 tests; the 6 tests above are the initial set.
 
 ---
 
