@@ -52,6 +52,21 @@ function notFound(res) {
   res.end('Not found');
 }
 
+function streamFile(res, abs) {
+  const stream = createReadStream(abs);
+  stream.on('error', () => {
+    if (res.headersSent) {
+      res.destroy();
+      return;
+    }
+    res.statusCode = 500;
+    res.removeHeader('Content-Length');
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.end('Read error');
+  });
+  stream.pipe(res);
+}
+
 export async function serveStaticFile(req, res, { root, urlPath, editorOrigin, runtimeToken, runtimeDir }) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.statusCode = 405;
@@ -70,7 +85,7 @@ export async function serveStaticFile(req, res, { root, urlPath, editorOrigin, r
     if (!stat.isFile() || stat.size > MAX_FILE) return notFound(res);
     setHeaders(res, editorOrigin, mimeOf(abs));
     if (req.method === 'HEAD') return res.end();
-    createReadStream(abs).pipe(res);
+    streamFile(res, abs);
     return;
   }
 
@@ -106,5 +121,5 @@ export async function serveStaticFile(req, res, { root, urlPath, editorOrigin, r
   setHeaders(res, editorOrigin, type);
   res.setHeader('Content-Length', stat.size);
   if (req.method === 'HEAD') return res.end();
-  createReadStream(abs).pipe(res);
+  streamFile(res, abs);
 }
