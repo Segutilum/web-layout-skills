@@ -1,4 +1,4 @@
-import { computeInsertionIndex, findParent } from './model.js';
+import { computeInsertionIndex, findParent, isDescendant } from './model.js';
 
 export function createDragController({ document, window, overlay, getTree, onChange, onMoved }) {
   let drag = null;
@@ -12,18 +12,9 @@ export function createDragController({ document, window, overlay, getTree, onCha
     return null;
   }
 
-  function siblingsOf(id) {
-    const parent = findParent(getTree(), id);
-    return parent ? parent.children : getTree();
-  }
-
-  function parentIdOf(id) {
-    const parent = findParent(getTree(), id);
-    return parent ? parent.id : '__root__';
-  }
-
   function domModuleChildren(parentEl) {
     const children = [];
+    if (!parentEl) return children;
     for (const child of parentEl.children || []) {
       if (!child.getAttribute) continue;
       const id = child.getAttribute('data-web-layout-id');
@@ -34,10 +25,8 @@ export function createDragController({ document, window, overlay, getTree, onCha
     return children;
   }
 
-  function domSiblingsOf(node) {
-    const parentEl = node.el.parentNode;
-    if (!parentEl) return null;
-    return domModuleChildren(parentEl).filter((child) => child.id !== node.id);
+  function domOthers(parentEl, id) {
+    return domModuleChildren(parentEl).filter((node) => node.id !== id);
   }
 
   function lineRect(others, index, parentEl) {
@@ -53,6 +42,79 @@ export function createDragController({ document, window, overlay, getTree, onCha
     return { left: rect.left, top: rect.top, width: rect.width };
   }
 
+  function validTarget(current, target) {
+    if (!current || !target) return false;
+    if (!target.parentId) return false;
+    if (target.parentId === current.id) return false;
+    return !isDescendant(getTree(), current.id, target.parentId);
+  }
+
+  function resolveTarget(x, y) {
+    const hits = (document.elementsFromPoint && document.elementsFromPoint(x, y)) || [];
+    const el = hits.find((item) => item && item.closest && !item.closest('[data-web-layout-overlay]'));
+    if (!el || !el.closest) return null;
+    const moduleEl = el.closest('[data-web-layout-id]');
+    if (!moduleEl) return null;
+    const id = moduleEl.getAttribute('data-web-layout-id');
+    const node = nodeById(getTree(), id);
+    if (!node) return null;
+
+    if (node.module && node.module.container) {
+      const rect = node.el.getBoundingClientRect();
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+        const others = domOthers(node.el, drag.id);
+        return {
+          parentId: node.id,
+          parentNode: node,
+          index: computeInsertionIndex(
+            others.map((child) => child.el.getBoundingClientRect()),
+            { x, y },
+            node.module.layout,
+          ),
+          others,
+          insertParent: node.el,
+        };
+      }
+    }
+
+    const parent = findParent(getTree(), id);
+    if (parent) {
+      const domSiblings = domOthers(parent.el, drag.id);
+      const others = domSiblings.length
+        ? domSiblings
+        : (parent.children || []).filter((child) => child.id !== drag.id);
+      return {
+        parentId: parent.id,
+        parentNode: parent,
+        index: computeInsertionIndex(
+          others.map((child) => child.el.getBoundingClientRect()),
+          { x, y },
+          parent.module?.layout || 'flow',
+        ),
+        others,
+        insertParent: parent.el,
+      };
+    }
+
+    const domParent = node.el.parentNode;
+    if (!domParent) return null;
+    const domSiblings = domOthers(domParent, drag.id);
+    const others = domSiblings.length
+      ? domSiblings
+      : getTree().filter((child) => child.id !== drag.id);
+    return {
+      parentId: '__root__',
+      parentNode: null,
+      index: computeInsertionIndex(
+        others.map((child) => child.el.getBoundingClientRect()),
+        { x, y },
+        'flow',
+      ),
+      others,
+      insertParent: domParent,
+    };
+  }
+
   function begin(id, event) {
     if (drag) return;
     if (event.pointerType === 'mouse' && event.button !== 0) return;
@@ -65,7 +127,7 @@ export function createDragController({ document, window, overlay, getTree, onCha
       node,
       pointerId: event.pointerId,
       origin: { x: event.clientX, y: event.clientY },
-      targetIndex: -1,
+      target: null,
     };
     try { event.target.setPointerCapture(event.pointerId); } catch { /* ignore */ }
     window.addEventListener('pointermove', onMove, true);
@@ -78,40 +140,43 @@ export function createDragController({ document, window, overlay, getTree, onCha
   function onMove(event) {
     if (!drag || event.pointerId !== drag.pointerId) return;
     event.preventDefault();
-    const parent = findParent(getTree(), drag.id);
-    const parentNode = parent || null;
-    const parentEl = drag.node.el.parentNode || null;
-    const domSiblings = domSiblingsOf(drag.node);
-    const others = domSiblings || (parentNode ? parentNode.children : getTree()).filter((node) => node.id !== drag.id);
-    const rects = others.map((node) => node.el.getBoundingClientRect());
-    const index = computeInsertionIndex(rects, { x: event.clientX, y: event.clientY }, parentNode?.module?.layout || 'flow');
-    drag.targetIndex = index;
-    overlay.showLine(lineRect(others, index, parentEl || (parentNode ? parentNode.el : document.body)));
+    const target = resolveTarget(event.clientX, event.clientY);
+    if (!validTarget(drag, target)) {
+      drag.target = null;
+      overlay.hideLine();
+      overlay.setDropTarget('');
+      return;
+    }
+    drag.target = target;
+    overlay.setDropTarget(target.parentNode && target.parentNode.id !== drag.id ? target.parentNode.id : '');
+    overlay.showLine(lineRect(target.others, target.index, target.insertParent));
   }
 
   function onUp(event) {
     if (!drag || event.pointerId !== drag.pointerId) return;
     const current = drag;
     finish();
-    if (current.targetIndex < 0) return;
-    const parent = findParent(getTree(), current.id);
-    const parentNode = parent || null;
-    const domParent = current.node.el.parentNode || null;
-    const domChildren = domParent ? domModuleChildren(domParent) : null;
-    const parentEl = domParent || (parentNode ? parentNode.el : document.body);
-    const others = domChildren
-      ? domChildren.filter((node) => node.id !== current.id)
-      : (parentNode ? parentNode.children : getTree()).filter((node) => node.id !== current.id);
-    const index = Math.max(0, Math.min(current.targetIndex, others.length));
-    const oldIndex = domChildren
-      ? domChildren.findIndex((node) => node.id === current.id)
-      : (parentNode ? parentNode.children : getTree()).findIndex((node) => node.id === current.id);
+    const target = current.target;
+    if (!validTarget(current, target)) return;
+
+    const parentEl = target.insertParent || (target.parentNode ? target.parentNode.el : document.body);
+    const others = (target.others || []).filter((node) => node.id !== current.id);
+    const index = Math.max(0, Math.min(target.index, others.length));
+    const oldIndex = domModuleChildren(parentEl).findIndex((node) => node.id === current.id);
     if (oldIndex === index) return;
+
+    const fromParent = findParent(getTree(), current.id);
+    const domParent = current.node.el.parentNode;
+    const fromSiblings = domParent
+      ? domModuleChildren(domParent)
+      : (fromParent ? fromParent.children : getTree());
+    const fromIndex = fromSiblings.findIndex((node) => node.id === current.id);
+
     parentEl.insertBefore(current.node.el, others[index] ? others[index].el : null);
     onMoved({
       module: current.id,
-      from: { parent: parentNode ? parentNode.id : '__root__', index: oldIndex },
-      to: { parent: parentNode ? parentNode.id : '__root__', index },
+      from: { parent: fromParent ? fromParent.id : '__root__', index: fromIndex },
+      to: { parent: target.parentId, index },
     });
     onChange();
   }
@@ -130,6 +195,7 @@ export function createDragController({ document, window, overlay, getTree, onCha
   function finish() {
     drag = null;
     overlay.hideLine();
+    overlay.setDropTarget('');
     window.removeEventListener('pointermove', onMove, true);
     window.removeEventListener('pointerup', onUp, true);
     window.removeEventListener('pointercancel', onCancel, true);
