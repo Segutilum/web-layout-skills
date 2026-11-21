@@ -73,6 +73,7 @@ export function createDragController({ document, window, overlay, getTree, onCha
     if (!drag || event.pointerId !== drag.pointerId) return;
     const current = drag;
     finish();
+    if (current.targetIndex < 0) return;
     const parent = findParent(getTree(), current.id);
     const parentNode = parent || null;
     const parentEl = parentNode ? parentNode.el : (current.node.el.parentNode || document.body);
