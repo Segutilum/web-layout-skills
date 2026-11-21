@@ -4,7 +4,8 @@ function statusFor(code) {
   if (code === 'E_PAGE_NOT_FOUND') return 404;
   if (code === 'E_FORBIDDEN') return 403;
   if (code === 'E_TOO_LARGE') return 413;
-  if (code === 'E_INTERNAL') return 500;
+  if (code === 'E_INTERNAL' || code === 'E_WRITE_FAILED') return 500;
+  if (typeof code !== 'string' || !code.startsWith('E_')) return 500;
   return 400;
 }
 
@@ -79,6 +80,11 @@ export function createApiHandler({ workspace, config, getEditorOrigin, getPrevie
       return true;
     } catch (error) {
       const code = error && error.code ? error.code : 'E_INTERNAL';
+      if (typeof code !== 'string' || !code.startsWith('E_')) {
+        console.error(error);
+        sendJson(res, 500, { ok: false, error: { code: 'E_WRITE_FAILED', message: 'server-side write failure' } });
+        return true;
+      }
       sendJson(res, statusFor(code), {
         ok: false,
         error: { code, message: error && error.message ? error.message : String(error) },
