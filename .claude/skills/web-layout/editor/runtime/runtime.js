@@ -78,6 +78,7 @@ function boot(config) {
     document,
     window,
     getTree: () => tree,
+    getSelectedId: () => selected,
     editorOrigin,
     runtimeToken,
     onAdd: (item) => {

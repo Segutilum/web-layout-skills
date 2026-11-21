@@ -35,7 +35,7 @@ function placeholderFor(doc, type, id) {
   return mark(el);
 }
 
-export function attachPaletteDrop({ document, window, getTree, onAdd, onRemove, editorOrigin, runtimeToken }) {
+export function attachPaletteDrop({ document, window, getTree, onAdd, onRemove, editorOrigin, runtimeToken, getSelectedId }) {
   let seq = 0;
   let insertMode = null;
 
@@ -119,6 +119,18 @@ export function attachPaletteDrop({ document, window, getTree, onAdd, onRemove, 
     return true;
   }
 
+  function isEditable(target) {
+    if (!target) return false;
+    const tag = String(target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+    return target.isContentEditable === true;
+  }
+
+  function selectedId() {
+    const id = typeof getSelectedId === 'function' ? getSelectedId() : '';
+    return id || '';
+  }
+
   function targetFromEvent(event) {
     const target = event && event.target;
     const el = target && target.closest ? target.closest('[data-web-layout-id]') : null;
@@ -157,10 +169,12 @@ export function attachPaletteDrop({ document, window, getTree, onAdd, onRemove, 
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Delete' && event.key !== 'Backspace') return;
     const target = event.target;
+    if (isEditable(target)) return;
     const el = target && target.closest ? target.closest('[data-web-layout-id]') : null;
-    if (!el) return;
+    const id = el ? el.getAttribute('data-web-layout-id') : selectedId();
+    if (!id) return;
     event.preventDefault();
-    remove(el.getAttribute('data-web-layout-id'));
+    remove(id);
   }, true);
 
   window.addEventListener('message', (event) => {
