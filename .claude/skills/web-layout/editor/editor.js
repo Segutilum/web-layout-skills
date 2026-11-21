@@ -1,5 +1,6 @@
 import { api } from './api.js';
-import { buildIntent, countChanges, hasDraft, validateForSubmit, moduleIndex } from './state.js';
+import { buildIntent, countChanges, hasDraft, validateForSubmit } from './state.js';
+import { renderInspector as renderInspectorView } from './inspector.js';
 import { PALETTE } from './runtime/constants.js';
 
 const ui = {
@@ -74,36 +75,12 @@ function renderPalette() {
   }
 }
 
-function selectedLabel(id) {
-  const index = moduleIndex(app.effectiveManifest || { modules: [] });
-  const mod = index.get(id);
-  return mod ? (mod.label || mod.id) : id;
-}
-
 function renderInspector() {
-  ui.inspector.innerHTML = '';
-  const title = document.createElement('h3');
-  title.textContent = '检查器';
-  ui.inspector.appendChild(title);
-  if (!app.selectedId) {
-    const muted = document.createElement('div');
-    muted.className = 'muted';
-    muted.textContent = '在预览里点击一个模块。';
-    ui.inspector.appendChild(muted);
-  } else {
-    const muted = document.createElement('div');
-    muted.className = 'muted';
-    muted.textContent = selectedLabel(app.selectedId);
-    ui.inspector.appendChild(muted);
-  }
-  const label = document.createElement('label');
-  label.textContent = '整体要求';
-  const global = document.createElement('textarea');
-  global.value = app.globalNote;
-  global.placeholder = '例如：整体更紧凑，首屏标题更突出';
-  global.addEventListener('input', () => { app.globalNote = global.value; renderSummary(); });
-  ui.inspector.appendChild(label);
-  ui.inspector.appendChild(global);
+  renderInspectorView({
+    container: ui.inspector,
+    app,
+    onChange: renderSummary,
+  });
 }
 
 function renderSummary() {
