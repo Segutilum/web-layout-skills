@@ -36,6 +36,25 @@ test('resolveRelativePath handles queries, schemes, and traversal', () => {
   assert.equal(resolveRelativePath('a/b.html', '../../secret'), 'secret');
 });
 
+test('resolveRelativePath normalizes backslash traversal and UNC', () => {
+  const root = path.resolve(os.tmpdir(), 'wl-workspace');
+  const result = resolveRelativePath('about/team.html', '..\\..\\secret');
+  assert.equal(result, 'secret');
+  assert.ok(!result.includes('\\'));
+  const joined = path.resolve(root, result);
+  assert.ok(joined === root || joined.startsWith(root + path.sep));
+  assert.equal(resolveRelativePath('index.html', '\\\\server\\share'), null);
+});
+
+test('resolveRelativePath keeps percent-encoded backslashes contained', () => {
+  const root = path.resolve(os.tmpdir(), 'wl-workspace');
+  const result = resolveRelativePath('about/team.html', '..%5c..%5csecret');
+  assert.ok(result);
+  assert.ok(!result.includes('\\'));
+  const joined = path.resolve(root, result);
+  assert.ok(joined === root || joined.startsWith(root + path.sep));
+});
+
 test('resolveInsideRoot serves inside and rejects escapes', async () => {
   const root = await tempRoot();
   assert.ok(await resolveInsideRoot(root, '/index.html'));

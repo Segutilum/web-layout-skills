@@ -19,8 +19,8 @@ export function resolveRelativePath(basePage, href) {
   const raw = String(href).trim();
   if (!raw || raw.startsWith('#') || raw.startsWith('//')) return null;
   if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return null;
-  const clean = raw.split('#')[0].split('?')[0];
-  if (!clean) return null;
+  const clean = normalizeRel(raw.split('#')[0].split('?')[0]);
+  if (!clean || clean.startsWith('//')) return null;
   const base = normalizeRel(basePage);
   const slash = base.lastIndexOf('/');
   const dir = slash >= 0 ? base.slice(0, slash + 1) : '';
