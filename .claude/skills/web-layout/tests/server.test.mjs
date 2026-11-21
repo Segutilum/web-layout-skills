@@ -109,6 +109,19 @@ test('two listeners serve preview, API, and shutdown', async () => {
   }
 });
 
+test('editor file server serves runtime assets', async () => {
+  const root = await fixture();
+  const app = await createApp({ root, page: 'index.html', editorPort: 0, previewPort: 0, idleMinutes: 0 });
+  try {
+    const res = await fetch(app.editorOrigin + '/runtime/constants.js', { headers: { Connection: 'close' } });
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-type'), /^text\/javascript/);
+    assert.ok((await res.text()).length > 0);
+  } finally {
+    await app.close();
+  }
+});
+
 test('API guards reject a wrong origin and an invalid manifest', async () => {
   const root = await fixture();
   const app = await createApp({ root, page: 'index.html', editorPort: 0, previewPort: 0, idleMinutes: 0 });

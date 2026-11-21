@@ -152,5 +152,5 @@ export async function serveEditorFile(req, res, { root, urlPath }) {
   res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
   res.setHeader('Content-Length', stat.size);
   if (req.method === 'HEAD') return res.end();
-  createReadStream(abs).pipe(res);
+  streamFile(res, abs);
 }
