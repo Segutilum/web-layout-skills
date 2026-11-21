@@ -166,10 +166,10 @@ export function buildTree(doc, manifest, added = new Map()) {
 export function serializeTree(nodes) {
   return (nodes || []).map((node) => ({
     id: node.id,
-    // The editor needs the parent module's layout to decide width/align
-    // enablement, including for palette-added containers. buildIntent strips
-    // this editor-only metadata before emitting the intent tree.
-    ...(node.module ? { module: node.module } : {}),
+    // The editor needs only the layout to decide width/align enablement,
+    // including for palette-added containers. buildIntent strips this
+    // editor-only field before emitting the intent tree.
+    ...(node.module && node.module.layout ? { layout: node.module.layout } : {}),
     ...(node.children && node.children.length ? { children: serializeTree(node.children) } : {}),
   }));
 }
