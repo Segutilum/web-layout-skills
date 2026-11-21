@@ -48,3 +48,19 @@ test('removes CSP and refresh meta tags when a preceding attribute contains >', 
   assert.equal(/content-security-policy/i.test(out), false);
   assert.equal(/http-equiv="refresh"/i.test(out), false);
 });
+
+test('preserves Report-Only CSP meta and content after it', () => {
+  const html = '<meta http-equiv="Content-Security-Policy-Report-Only" content="x"><title>T</title></head><body><p>a"b"c"d</p><p>keep</p></body>';
+  const out = injectPreviewHtml(html, OPTS);
+  assert.match(out, /<meta http-equiv="Content-Security-Policy-Report-Only"/i);
+  for (const fragment of ['<title>T</title>', '</head>', '<body>', '<p>a"b"c"d</p>', '<p>keep</p>']) {
+    assert.ok(out.includes(fragment), fragment);
+  }
+});
+
+test('preserves a refresh-extra meta and following content', () => {
+  const html = '<meta http-equiv="refresh-extra" content="0;url=/x"><p>keep</p>';
+  const out = injectPreviewHtml(html, OPTS);
+  assert.match(out, /<meta http-equiv="refresh-extra"/i);
+  assert.ok(out.includes('<p>keep</p>'));
+});

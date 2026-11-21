@@ -1,10 +1,11 @@
 export function stripMeta(html, httpEquiv) {
-  const attrs = "(?:[^>\"']|\"[^\"]*\"|'[^']*')*";
-  const re = new RegExp(
-    '<meta\\b' + attrs + 'http-equiv\\s*=\\s*["\']?' + httpEquiv + '["\']?' + attrs + '>',
-    'gi',
-  );
-  return String(html).replace(re, '');
+  const tagRe = /<meta\b(?:[^>"']|"[^"]*"|'[^']*')*>/gi;
+  return String(html).replace(tagRe, (tag) => {
+    const m = tag.match(/\bhttp-equiv\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+    if (!m) return tag;
+    const value = (m[1] ?? m[2] ?? m[3] ?? '').trim();
+    return value.toLowerCase() === String(httpEquiv).toLowerCase() ? '' : tag;
+  });
 }
 
 export function buildBootstrap({ editorOrigin, runtimeToken }) {
