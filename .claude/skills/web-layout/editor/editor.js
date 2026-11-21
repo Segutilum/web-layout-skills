@@ -93,6 +93,7 @@ function renderSummary() {
   if (hints > 0) ui.summary.textContent += ' · 提示 ' + hints;
   const errors = validateForSubmit(app);
   ui.submit.disabled = app.submitted || errors.length > 0;
+  ui.reset.disabled = app.submitted;
   if (errors.length && !app.submitted) {
     ui.summary.textContent += ' · ' + errors.join(', ');
   }
@@ -162,6 +163,7 @@ async function loadPage(page) {
   else if (state.manifestStatus !== 'ok') setBanners([{ text: '清单缺失或无效，正在使用启发式模块。' }]);
   renderPageSelect(state.pages, page);
   ui.frame.src = previewUrlFor(page);
+  renderPalette();
   renderInspector();
   renderSummary();
   startPolling();
@@ -227,6 +229,9 @@ window.addEventListener('message', (event) => {
     app.currentTree = data.tree;
     app.unresolved = data.unresolved || [];
     if (data.manifest) app.effectiveManifest = data.manifest;
+    // An iframe reload (or a navigation within the preview) boots a fresh runtime
+    // with locked=false; re-assert the submitted lock so the preview stays read-only.
+    if (app.submitted) postToFrame({ type: 'lock', runtimeToken: app.state.runtimeToken });
     if (app.unresolved.length) {
       const ids = app.unresolved.map((item) => item.id).join('、');
       setBanners([{ text: '清单未匹配：' + ids + '；请让 agent 重新生成清单。', error: true }]);
@@ -278,6 +283,7 @@ for (const button of document.querySelectorAll('.viewports button')) {
 }
 
 ui.reset.addEventListener('click', () => {
+  if (app.submitted) return;
   if (!window.confirm('重置所有拖拽和备注？')) return;
   app.notes = {};
   app.layoutHints = {};
