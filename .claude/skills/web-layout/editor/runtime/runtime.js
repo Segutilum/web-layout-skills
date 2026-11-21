@@ -16,6 +16,7 @@ function boot(config) {
   let removed = new Set();
   let moved = [];
   let selected = '';
+  let locked = false;
   let overlay = null;
   let drag = null;
 
@@ -72,6 +73,7 @@ function boot(config) {
       moved = moved.filter((existing) => existing.module !== item.module);
       moved.push(item);
     },
+    isLocked: () => locked,
   });
 
   const paletteDrop = attachPaletteDrop({
@@ -81,6 +83,7 @@ function boot(config) {
     getSelectedId: () => selected,
     editorOrigin,
     runtimeToken,
+    isLocked: () => locked,
     onAdd: (item) => {
       added.set(item.id, item);
       build();
@@ -114,6 +117,8 @@ function boot(config) {
         manifest,
       });
     }
+    if (data.type === 'lock') locked = true;
+    if (data.type === 'unlock') locked = false;
     if (data.type === 'reset') location.reload();
   });
 

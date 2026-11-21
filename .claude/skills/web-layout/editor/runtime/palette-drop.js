@@ -35,7 +35,7 @@ function placeholderFor(doc, type, id) {
   return mark(el);
 }
 
-export function attachPaletteDrop({ document, window, getTree, onAdd, onRemove, editorOrigin, runtimeToken, getSelectedId }) {
+export function attachPaletteDrop({ document, window, getTree, onAdd, onRemove, editorOrigin, runtimeToken, getSelectedId, isLocked = () => false }) {
   let seq = 0;
   let insertMode = null;
 
@@ -159,6 +159,7 @@ export function attachPaletteDrop({ document, window, getTree, onAdd, onRemove, 
   }, true);
 
   document.addEventListener('drop', (event) => {
+    if (isLocked()) return;
     const type = event.dataTransfer && event.dataTransfer.getData('application/x-web-layout-module');
     if (!type) return;
     event.preventDefault();
@@ -167,6 +168,7 @@ export function attachPaletteDrop({ document, window, getTree, onAdd, onRemove, 
   }, true);
 
   document.addEventListener('keydown', (event) => {
+    if (isLocked()) return;
     if (event.key !== 'Delete' && event.key !== 'Backspace') return;
     const target = event.target;
     if (isEditable(target)) return;
@@ -186,6 +188,7 @@ export function attachPaletteDrop({ document, window, getTree, onAdd, onRemove, 
   });
 
   document.addEventListener('click', (event) => {
+    if (isLocked()) return;
     if (!insertMode) return;
     const type = insertMode;
     insertMode = null;

@@ -1,6 +1,6 @@
 import { computeInsertionIndex, findParent, isDescendant } from './model.js';
 
-export function createDragController({ document, window, overlay, getTree, onChange, onMoved }) {
+export function createDragController({ document, window, overlay, getTree, onChange, onMoved, isLocked = () => false }) {
   let drag = null;
 
   function nodeById(nodes, id) {
@@ -110,6 +110,7 @@ export function createDragController({ document, window, overlay, getTree, onCha
   }
 
   function begin(id, event) {
+    if (isLocked()) return;
     if (drag) return;
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     const node = nodeById(getTree(), id);

@@ -93,8 +93,18 @@ export async function createApp({ root, page = '', editorPort = 0, previewPort =
   });
 
   servers.push(editorServer, previewServer);
-  const p1 = await listen(editorServer, config.editorPort);
-  const p2 = await listen(previewServer, config.previewPort);
+  let p1;
+  let p2;
+  try {
+    p1 = await listen(editorServer, config.editorPort);
+    p2 = await listen(previewServer, config.previewPort);
+  } catch (error) {
+    // A failed start must not leave the other listener bound. Do not call close()
+    // here: server.json is only written after both binds succeed, and any existing
+    // file may belong to a live instance.
+    await Promise.all(servers.map((server) => new Promise((resolve) => server.close(() => resolve()))));
+    throw error;
+  }
   editorOrigin = 'http://127.0.0.1:' + p1;
   previewOrigin = 'http://127.0.0.1:' + p2;
   const encodedPage = String(page || '').split('/').map(encodeURIComponent).join('/');

@@ -12,6 +12,7 @@ const ui = {
   frame: document.getElementById('preview'),
   frameWrap: document.getElementById('frame-wrap'),
   reset: document.getElementById('reset'),
+  continueButton: document.getElementById('continue'),
   submit: document.getElementById('submit'),
 };
 
@@ -62,13 +63,14 @@ function renderPalette() {
     const el = document.createElement('div');
     el.className = 'palette-item';
     el.textContent = item.label;
-    el.draggable = true;
+    el.draggable = !app.submitted;
+    el.classList.toggle('disabled', app.submitted);
     el.addEventListener('dragstart', (event) => {
       event.dataTransfer.setData('application/x-web-layout-module', item.type);
       event.dataTransfer.effectAllowed = 'copy';
     });
     el.addEventListener('click', () => {
-      if (!app.state) return;
+      if (app.submitted || !app.state) return;
       postToFrame({ type: 'insertMode', value: item.type, runtimeToken: app.state.runtimeToken });
       setBanners([{ text: '点击预览里的位置来插入「' + item.label + '」' }]);
     });
@@ -155,6 +157,7 @@ async function loadPage(page) {
   app.unresolved = [];
   app.stale = state.manifestStatus === 'stale';
   app.submitted = false;
+  ui.continueButton.hidden = true;
   if (app.stale) setBanners([{ text: '清单已过期，请让 agent 重新生成。', error: true }]);
   else if (state.manifestStatus !== 'ok') setBanners([{ text: '清单缺失或无效，正在使用启发式模块。' }]);
   renderPageSelect(state.pages, page);
@@ -174,7 +177,7 @@ function startPolling() {
       if (app.stale) setBanners([{ text: '文件已在磁盘上改变，请重新打开或刷新。', error: true }]);
       renderSummary();
     } catch {
-      /* a failed poll is not fatal */
+      setBanners([{ text: '无法连接本地服务，可能已退出。', error: true }]);
     }
   }, 4000);
 }
@@ -224,6 +227,10 @@ window.addEventListener('message', (event) => {
     app.currentTree = data.tree;
     app.unresolved = data.unresolved || [];
     if (data.manifest) app.effectiveManifest = data.manifest;
+    if (app.unresolved.length) {
+      const ids = app.unresolved.map((item) => item.id).join('、');
+      setBanners([{ text: '清单未匹配：' + ids + '；请让 agent 重新生成清单。', error: true }]);
+    }
     renderInspector();
     renderSummary();
   }
@@ -299,12 +306,30 @@ ui.submit.addEventListener('click', async () => {
     const intent = buildIntent(app);
     const result = await api('/api/intent', { method: 'POST', body: { intent } });
     app.submitted = true;
-    setBanners([{ text: '意图已保存到 ' + result.path + '，请回到 Claude Code。' }]);
+    ui.continueButton.hidden = false;
+    postToFrame({ type: 'lock', runtimeToken: app.state.runtimeToken });
+    const warningText = (result.warnings || [])
+      .map((item) => item.class + ' → ' + item.pages.join(', '))
+      .join('；');
+    setBanners([{ text: '意图已保存到 ' + result.path + (warningText ? '；共享样式：' + warningText : '') + '，请回到 Claude Code。' }]);
+    renderPalette();
+    renderInspector();
+    renderSummary();
   } catch (error) {
     setBanners([{ text: '提交失败：' + error.message, error: true }]);
   } finally {
     renderSummary();
   }
+});
+
+ui.continueButton.addEventListener('click', () => {
+  if (!window.confirm('继续编辑会允许新的提交，可能覆盖尚未应用的意图。继续？')) return;
+  app.submitted = false;
+  ui.continueButton.hidden = true;
+  postToFrame({ type: 'unlock', runtimeToken: app.state.runtimeToken });
+  renderPalette();
+  renderInspector();
+  renderSummary();
 });
 
 async function boot() {

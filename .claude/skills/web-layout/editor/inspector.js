@@ -61,6 +61,7 @@ export function renderInspector({ container, app, onChange }) {
     const note = document.createElement('textarea');
     note.placeholder = '这个模块要怎么改？';
     note.value = (added ? added.note : app.notes[app.selectedId]) || '';
+    note.disabled = Boolean(app.submitted);
     note.addEventListener('input', () => {
       if (added) added.note = note.value;
       app.notes[app.selectedId] = note.value;
@@ -105,6 +106,7 @@ export function renderInspector({ container, app, onChange }) {
   const global = document.createElement('textarea');
   global.placeholder = '例如：整体更紧凑，首屏标题更突出';
   global.value = app.globalNote;
+  global.disabled = Boolean(app.submitted);
   global.addEventListener('input', () => { app.globalNote = global.value; onChange(); });
   container.appendChild(field('整体要求', global));
 
