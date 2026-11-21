@@ -17,6 +17,9 @@ const ALIGNS = [
 export function parentLayoutOf(tree, manifest, id) {
   const parent = findParent(tree, id);
   if (!parent || parent.id === '__root__') return 'flow';
+  // The runtime tree carries the parent's module (manifest or palette-added),
+  // so a module dragged into an added grid container resolves to grid-*.
+  if (parent.module) return parent.module.layout || 'flow';
   const mod = moduleIndex(manifest).get(parent.id);
   if (mod) return mod.layout;
   const added = (manifest && manifest.modules || []).find((item) => item.id === parent.id);

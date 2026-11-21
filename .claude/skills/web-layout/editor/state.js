@@ -82,6 +82,13 @@ export function validateForSubmit(state) {
   return errors;
 }
 
+function intentTree(nodes) {
+  return (nodes || []).map((node) => ({
+    id: node.id,
+    ...(node.children !== undefined ? { children: intentTree(node.children) } : {}),
+  }));
+}
+
 export function buildIntent(state) {
   const manifest = state.manifest || state.effectiveManifest || { modules: [] };
   const index = moduleIndex(manifest);
@@ -134,7 +141,7 @@ export function buildIntent(state) {
       removed,
     },
     modules,
-    tree: state.tree || state.currentTree,
+    tree: intentTree(state.tree || state.currentTree),
     context: {
       manifestStatus: state.manifestStatus || 'ok',
       stylesheets: state.stylesheets || [],
