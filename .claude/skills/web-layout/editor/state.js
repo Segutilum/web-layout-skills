@@ -36,6 +36,12 @@ export function countChanges({ moved, added, removed, notes }) {
   };
 }
 
+export function hasDraft(state) {
+  const changes = countChanges(state);
+  return changes.moved + changes.added + changes.removed + changes.notes > 0
+    || String(state.globalNote || '').trim() !== '';
+}
+
 export function validateForSubmit(state) {
   const errors = [];
   if (!state.page) errors.push('E_NO_PAGE');

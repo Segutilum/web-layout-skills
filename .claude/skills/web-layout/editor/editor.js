@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { buildIntent, countChanges, validateForSubmit, moduleIndex } from './state.js';
+import { buildIntent, countChanges, hasDraft, validateForSubmit, moduleIndex } from './state.js';
 import { PALETTE } from './runtime/constants.js';
 
 const ui = {
@@ -111,6 +111,10 @@ function postToFrame(message) {
   frame.contentWindow.postMessage(message, app.state.previewOrigin);
 }
 
+function previewUrlFor(page) {
+  return app.state.previewOrigin + '/' + page.split('/').map(encodeURIComponent).join('/');
+}
+
 async function loadPage(page) {
   stopPolling();
   setBanners([]);
@@ -137,8 +141,7 @@ async function loadPage(page) {
   if (app.stale) setBanners([{ text: '清单已过期，请让 agent 重新生成。', error: true }]);
   else if (state.manifestStatus !== 'ok') setBanners([{ text: '清单缺失或无效，正在使用启发式模块。' }]);
   renderPageSelect(state.pages, page);
-  const src = state.previewOrigin + '/' + page.split('/').map(encodeURIComponent).join('/');
-  ui.frame.src = src;
+  ui.frame.src = previewUrlFor(page);
   renderInspector();
   renderSummary();
   startPolling();
@@ -173,11 +176,20 @@ window.addEventListener('message', (event) => {
   if (data.type === 'boot') {
     const bootPage = decodeURIComponent(data.page || '');
     if (bootPage && bootPage !== app.state.page) {
-      const changes = countChanges(app);
-      const dirty = changes.moved + changes.added + changes.removed + changes.notes > 0;
-      if (dirty && !window.confirm('预览跳转到了 ' + bootPage + '，放弃当前未提交改动？')) {
-        loadPage(app.state.page);
-        return;
+      if (hasDraft(app)) {
+        const ok = window.confirm('预览跳转到了 ' + bootPage + '。切换会放弃结构改动；取消则返回当前页并保留备注。继续切换？');
+        if (!ok) {
+          ui.frame.src = previewUrlFor(app.state.page);
+          app.currentTree = null;
+          app.baselineTree = null;
+          app.added = new Map();
+          app.removed = new Set();
+          app.moved = [];
+          app.selectedId = '';
+          renderInspector();
+          renderSummary();
+          return;
+        }
       }
       loadPage(bootPage);
       return;
@@ -219,7 +231,7 @@ window.addEventListener('message', (event) => {
 });
 
 ui.pageSelect.addEventListener('change', async () => {
-  if (app.currentTree && countChanges(app).moved + countChanges(app).added + countChanges(app).removed + countChanges(app).notes > 0) {
+  if (hasDraft(app)) {
     if (!window.confirm('放弃当前未提交的改动并切换页面？')) {
       renderPageSelect(app.state.pages, app.state.page);
       return;

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   widthAlignEnabled,
   countChanges,
+  hasDraft,
   validateForSubmit,
   buildIntent,
   moduleIndex,
@@ -65,6 +66,17 @@ test('buildIntent produces the intent contract', () => {
   assert.deepEqual(intent.tree, tree);
   assert.deepEqual(intent.context.stylesheets, ['styles.css']);
   assert.equal(intent.globalNote, 'Tighter');
+});
+
+test('hasDraft detects the global note, module notes, and structural changes', () => {
+  const empty = { moved: [], added: new Map(), removed: new Set(), notes: {}, globalNote: '' };
+  assert.equal(hasDraft(empty), false);
+  assert.equal(hasDraft({ ...empty, globalNote: '   ' }), false);
+  assert.equal(hasDraft({ ...empty, globalNote: 'Tighter' }), true);
+  assert.equal(hasDraft({ ...empty, notes: { hero: 'Less padding' } }), true);
+  assert.equal(hasDraft({ ...empty, moved: [{ module: 'hero' }] }), true);
+  assert.equal(hasDraft({ ...empty, added: new Map([['new-1', { id: 'new-1' }]]) }), true);
+  assert.equal(hasDraft({ ...empty, removed: new Set(['footer']) }), true);
 });
 
 test('validateForSubmit rejects empty, stale, unresolved, and missing-page states', () => {
