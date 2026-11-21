@@ -179,7 +179,7 @@ window.addEventListener('message', (event) => {
       if (hasDraft(app)) {
         const ok = window.confirm('预览跳转到了 ' + bootPage + '。切换会放弃结构改动；取消则返回当前页并保留备注。继续切换？');
         if (!ok) {
-          ui.frame.src = previewUrlFor(app.state.page);
+          ui.frame.src = previewUrlFor(app.state.page) + '?__web_layout_reload=' + Date.now();
           app.currentTree = null;
           app.baselineTree = null;
           app.added = new Map();
