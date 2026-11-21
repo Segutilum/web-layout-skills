@@ -115,3 +115,98 @@ test('writeIntentAtomic writes the fixed path', async () => {
   assert.equal(parsed.kind, 'web-layout-intent');
   assert.ok(parsed.submittedAt);
 });
+
+test('removing a container together with its descendants is valid', () => {
+  const intent = validIntent();
+  intent.changes.added = [];
+  intent.changes.moved = [];
+  intent.changes.removed = [{ module: 'hero' }, { module: 'hero-title' }];
+  intent.modules = [];
+  intent.tree = [{ id: '__root__', children: [
+    { id: 'header' }, { id: 'features' }, { id: 'footer' },
+  ] }];
+  const result = validateIntent(intent, { manifest: manifest(), sourceVersion: SOURCE, styleVersion: STYLE });
+  assert.deepEqual(result, { ok: true, errors: [] });
+});
+
+test('a collapsed nearest surviving ancestor still rejects a removed descendant', () => {
+  const nested = {
+    schema: 1,
+    page: 'index.html',
+    sourceVersion: SOURCE,
+    modules: [
+      { id: 'header', container: false },
+      { id: 'outer', container: true, children: [
+        { id: 'inner', container: true, children: [{ id: 'h1', container: false }] },
+      ] },
+      { id: 'footer', container: false },
+    ],
+  };
+  const intent = validIntent();
+  intent.changes.added = [];
+  intent.changes.moved = [];
+  intent.changes.removed = [{ module: 'inner' }, { module: 'h1' }];
+  intent.modules = [];
+  intent.tree = [{ id: '__root__', children: [
+    { id: 'header' }, { id: 'outer' }, { id: 'footer' },
+  ] }];
+  const result = validateIntent(intent, { manifest: nested, sourceVersion: SOURCE, styleVersion: STYLE });
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((error) => error.code === 'E_TREE_INVALID' && error.message.includes('ancestor must be expanded')));
+});
+
+test('added module notes are limited to 4000 characters', () => {
+  const tooLong = validIntent();
+  tooLong.changes.added[0].note = 'x'.repeat(4001);
+  const result = validateIntent(tooLong, { manifest: manifest(), sourceVersion: SOURCE, styleVersion: STYLE });
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((error) => error.code === 'E_TREE_INVALID' && error.message.includes('note too long')));
+
+  const atLimit = validIntent();
+  atLimit.changes.added[0].note = 'x'.repeat(4000);
+  assert.equal(validateIntent(atLimit, { manifest: manifest(), sourceVersion: SOURCE, styleVersion: STYLE }).ok, true);
+});
+
+test('a removed module explicitly listed in the tree is rejected', () => {
+  const intent = validIntent();
+  intent.tree[0].children = [
+    { id: 'header' },
+    { id: 'hero', children: [{ id: 'hero-title' }, { id: 'new-1' }] },
+    { id: 'features' },
+    { id: 'footer' },
+  ];
+  const result = validateIntent(intent, { manifest: manifest(), sourceVersion: SOURCE, styleVersion: STYLE });
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((error) => error.code === 'E_TREE_INVALID' && error.message.includes('removed module listed in tree')));
+});
+
+test('a pretty-printed UTF-8 intent over 2 MiB is rejected', () => {
+  const added = [];
+  const treeChildren = [
+    { id: 'header' },
+    { id: 'hero', children: [{ id: 'hero-title' }] },
+    { id: 'features' },
+    { id: 'footer' },
+  ];
+  for (let index = 0; index < 200; index += 1) {
+    const id = 'added-' + index;
+    added.push({ id, type: 'heading', label: 'Quote', parent: '__root__', note: '中'.repeat(4000) });
+    treeChildren.push({ id });
+  }
+  const intent = {
+    schema: 1,
+    kind: 'web-layout-intent',
+    page: 'index.html',
+    sourceVersion: SOURCE,
+    styleVersion: STYLE,
+    globalNote: 'Tighter spacing',
+    changes: { moved: [], added, removed: [] },
+    modules: [],
+    tree: [{ id: '__root__', children: treeChildren }],
+  };
+  assert.ok(JSON.stringify(intent).length < 2 * 1024 * 1024);
+  assert.ok(Buffer.byteLength(JSON.stringify(intent, null, 2)) > 2 * 1024 * 1024);
+  const result = validateIntent(intent, { manifest: manifest(), sourceVersion: SOURCE, styleVersion: STYLE });
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((error) => error.code === 'E_TOO_LARGE'));
+});

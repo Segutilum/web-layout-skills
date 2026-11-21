@@ -33,18 +33,20 @@ function findNode(nodes, id) {
 function expandTree(tree, manifestIndex, added, removed) {
   const seen = new Set();
   const ids = [];
-  const explicit = new Set(['__root__']);
   const walk = (node) => {
     if (!node || typeof node.id !== 'string') return;
     if (seen.has(node.id)) throw fail('E_TREE_INVALID', 'duplicate module in tree: ' + node.id);
     seen.add(node.id);
     if (node.id !== '__root__') ids.push(node.id);
-    if (node.children !== undefined) explicit.add(node.id);
-    const children = node.children !== undefined
+    const explicit = node.children !== undefined;
+    const children = explicit
       ? node.children
       : (manifestIndex.get(node.id)?.children || []).map((child) => ({ id: child.id }));
     for (const child of children) {
-      if (removed.has(child.id)) continue;
+      if (removed.has(child.id)) {
+        if (explicit) throw fail('E_TREE_INVALID', 'removed module listed in tree: ' + child.id);
+        continue;
+      }
       const parent = node.id;
       const isContainer = parent === '__root__'
         || manifestIndex.get(parent)?.container === true
@@ -54,7 +56,7 @@ function expandTree(tree, manifestIndex, added, removed) {
     }
   };
   for (const rootNode of tree) walk(rootNode);
-  return { ids, explicit };
+  return { ids };
 }
 
 export function validateIntent(intent, { manifest, sourceVersion, styleVersion }) {
@@ -82,6 +84,7 @@ export function validateIntent(intent, { manifest, sourceVersion, styleVersion }
     if (!PALETTE_TYPES.has(item.type)) add('E_TREE_INVALID', 'unknown added type: ' + item.type);
     if (manifestIndex.has(item.id)) add('E_TREE_INVALID', 'added id collides with manifest: ' + item.id);
     if (added.has(item.id)) add('E_TREE_INVALID', 'duplicate added id: ' + item.id);
+    if (typeof item.note === 'string' && item.note.length > 4000) add('E_TREE_INVALID', 'note too long: ' + item.id);
     added.set(item.id, item);
   }
   const removed = new Set();
@@ -99,7 +102,7 @@ export function validateIntent(intent, { manifest, sourceVersion, styleVersion }
     add('E_TREE_INVALID', 'tree must contain exactly one __root__');
   }
 
-  let expanded = { ids: [], explicit: new Set() };
+  let expanded = { ids: [] };
   try {
     expanded = expandTree(intent.tree || [], manifestIndex, added, removed);
   } catch (error) {
@@ -114,8 +117,9 @@ export function validateIntent(intent, { manifest, sourceVersion, styleVersion }
   for (const id of actual) if (!expected.has(id)) add('E_TREE_INVALID', 'unexpected module in tree: ' + id);
 
   for (const id of removed) {
-    const parent = parentMap.get(id);
-    const node = findNode(intent.tree, parent);
+    let ancestor = parentMap.get(id);
+    while (removed.has(ancestor)) ancestor = parentMap.get(ancestor);
+    const node = findNode(intent.tree, ancestor);
     if (!node || node.children === undefined) add('E_TREE_INVALID', 'ancestor must be expanded for removed module: ' + id);
   }
   for (const item of movedArr) {
@@ -138,7 +142,7 @@ export function validateIntent(intent, { manifest, sourceVersion, styleVersion }
     if (mod.align !== undefined && !ALIGNS.has(mod.align)) add('E_TREE_INVALID', 'invalid align: ' + mod.id);
   }
   if (typeof intent.globalNote === 'string' && intent.globalNote.length > 8000) add('E_TREE_INVALID', 'globalNote too long');
-  if (JSON.stringify(intent).length > 2 * 1024 * 1024) add('E_TOO_LARGE', 'intent exceeds 2 MiB');
+  if (Buffer.byteLength(JSON.stringify(intent, null, 2)) > 2 * 1024 * 1024) add('E_TOO_LARGE', 'intent exceeds 2 MiB');
 
   return errors.length ? { ok: false, errors } : { ok: true, errors: [] };
 }
