@@ -164,14 +164,22 @@ export function buildTree(doc, manifest, added = new Map()) {
 }
 
 export function serializeTree(nodes) {
-  return (nodes || []).map((node) => ({
-    id: node.id,
+  return (nodes || []).map((node) => {
+    const children = serializeTree(node.children);
     // The editor needs only the layout to decide width/align enablement,
     // including for palette-added containers. buildIntent strips this
     // editor-only field before emitting the intent tree.
-    ...(node.module && node.module.layout ? { layout: node.module.layout } : {}),
-    ...(node.children && node.children.length ? { children: serializeTree(node.children) } : {}),
-  }));
+    return {
+      id: node.id,
+      ...(node.module && node.module.layout ? { layout: node.module.layout } : {}),
+      // A container must always carry its children array, even when empty:
+      // the intent validator reads an omitted `children` as "unchanged" and
+      // would re-expand manifest children that were removed or moved out.
+      ...(node.module && node.module.container
+        ? { children }
+        : (node.children && node.children.length ? { children } : {})),
+    };
+  });
 }
 
 export function serializeRoot(nodes) {

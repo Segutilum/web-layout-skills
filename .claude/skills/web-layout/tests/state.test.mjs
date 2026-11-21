@@ -14,6 +14,8 @@ import {
   demoteModule,
 } from '../editor/state.js';
 import { validateManifest } from '../scripts/lib/manifest.mjs';
+import { serializeRoot } from '../editor/runtime/dom.js';
+import { validateIntent } from '../scripts/lib/intent.mjs';
 
 const manifest = {
   schema: 1,
@@ -204,6 +206,110 @@ test('promoteModule caps the manifest label so the result validates', () => {
   assert.equal(result.ok, true, result.errors.join('; '));
   assert.ok(next.modules[0].children[0].label.length <= 40);
   assert.equal(candidate.label.length, 80);
+});
+
+const SOURCE_VERSION = 'sha256:' + 'a'.repeat(64);
+const STYLE_VERSION = 'sha256:' + 'b'.repeat(64);
+
+const containerManifest = {
+  schema: 1,
+  page: 'index.html',
+  sourceVersion: SOURCE_VERSION,
+  stylesheets: ['styles.css'],
+  modules: [
+    { id: 'header', role: 'header', label: 'Header', ref: 'header', matchIndex: 0, tag: 'header', classes: 'site-header', text: 'H', fingerprint: '', container: false, layout: 'flow' },
+    { id: 'features', role: 'section', label: 'Features', ref: 'section.features', matchIndex: 0, tag: 'section', classes: 'features', text: 'F', fingerprint: '', container: true, layout: 'row', children: [
+      { id: 'a', role: 'paragraph', label: 'A', ref: 'section.features p.a', matchIndex: 0, tag: 'p', classes: 'a', text: 'A', fingerprint: '', container: false, layout: 'flow' },
+      { id: 'b', role: 'paragraph', label: 'B', ref: 'section.features p.b', matchIndex: 0, tag: 'p', classes: 'b', text: 'B', fingerprint: '', container: false, layout: 'flow' },
+    ] },
+    { id: 'footer', role: 'footer', label: 'Footer', ref: 'footer', matchIndex: 0, tag: 'footer', classes: 'site-footer', text: 'F', fingerprint: '', container: false, layout: 'flow' },
+  ],
+};
+
+function moduleById(id) {
+  const walk = (modules) => {
+    for (const mod of modules || []) {
+      if (mod.id === id) return mod;
+      const found = walk(mod.children);
+      if (found) return found;
+    }
+    return null;
+  };
+  return walk(containerManifest.modules);
+}
+
+function treeNode(id, children = []) {
+  return { id, module: moduleById(id), children };
+}
+
+function intentState(tree, changes) {
+  return {
+    page: 'index.html',
+    sourceVersion: SOURCE_VERSION,
+    styleVersion: STYLE_VERSION,
+    manifestStatus: 'ok',
+    stylesheets: ['styles.css'],
+    manifest: containerManifest,
+    tree,
+    moved: changes.moved || [],
+    added: new Map(),
+    removed: changes.removed || new Set(),
+    notes: {},
+    layoutHints: {},
+    globalNote: '',
+  };
+}
+
+function collectTreeIds(nodes, out = []) {
+  for (const node of nodes || []) {
+    out.push(node.id);
+    collectTreeIds(node.children, out);
+  }
+  return out;
+}
+
+test('a container emptied by removal serializes as an expanded tree node', () => {
+  const tree = serializeRoot([
+    treeNode('header'),
+    treeNode('features'),
+    treeNode('footer'),
+  ]);
+  const intent = buildIntent(intentState(tree, { removed: new Set(['a', 'b']) }));
+  const result = validateIntent(intent, {
+    manifest: containerManifest,
+    sourceVersion: SOURCE_VERSION,
+    styleVersion: STYLE_VERSION,
+  });
+  assert.equal(result.ok, true, JSON.stringify(result.errors));
+  const features = intent.tree[0].children.find((node) => node.id === 'features');
+  assert.deepEqual(features.children, []);
+});
+
+test('a container emptied by moves does not re-expand its former children', () => {
+  const tree = serializeRoot([
+    treeNode('header'),
+    treeNode('features'),
+    treeNode('a'),
+    treeNode('b'),
+    treeNode('footer'),
+  ]);
+  const intent = buildIntent(intentState(tree, {
+    moved: [
+      { module: 'a', from: { parent: 'features', index: 0 }, to: { parent: '__root__', index: 2 } },
+      { module: 'b', from: { parent: 'features', index: 1 }, to: { parent: '__root__', index: 3 } },
+    ],
+  }));
+  const result = validateIntent(intent, {
+    manifest: containerManifest,
+    sourceVersion: SOURCE_VERSION,
+    styleVersion: STYLE_VERSION,
+  });
+  assert.equal(result.ok, true, JSON.stringify(result.errors));
+  const features = intent.tree[0].children.find((node) => node.id === 'features');
+  assert.deepEqual(features.children, []);
+  const ids = collectTreeIds(intent.tree);
+  assert.equal(ids.filter((id) => id === 'a').length, 1);
+  assert.equal(ids.filter((id) => id === 'b').length, 1);
 });
 
 test('demoteModule moves children up and removes the wrapper', () => {
