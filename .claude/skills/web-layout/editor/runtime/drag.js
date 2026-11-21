@@ -22,7 +22,25 @@ export function createDragController({ document, window, overlay, getTree, onCha
     return parent ? parent.id : '__root__';
   }
 
-  function lineRect(others, index, parentNode) {
+  function domModuleChildren(parentEl) {
+    const children = [];
+    for (const child of parentEl.children || []) {
+      if (!child.getAttribute) continue;
+      const id = child.getAttribute('data-web-layout-id');
+      if (!id) continue;
+      const node = nodeById(getTree(), id);
+      if (node) children.push(node);
+    }
+    return children;
+  }
+
+  function domSiblingsOf(node) {
+    const parentEl = node.el.parentNode;
+    if (!parentEl) return null;
+    return domModuleChildren(parentEl).filter((child) => child.id !== node.id);
+  }
+
+  function lineRect(others, index, parentEl) {
     if (others[index]) {
       const rect = others[index].el.getBoundingClientRect();
       return { left: rect.left, top: rect.top - 2, width: rect.width };
@@ -31,7 +49,7 @@ export function createDragController({ document, window, overlay, getTree, onCha
       const rect = others[others.length - 1].el.getBoundingClientRect();
       return { left: rect.left, top: rect.bottom - 1, width: rect.width };
     }
-    const rect = (parentNode ? parentNode.el : document.body).getBoundingClientRect();
+    const rect = (parentEl || document.body).getBoundingClientRect();
     return { left: rect.left, top: rect.top, width: rect.width };
   }
 
@@ -62,11 +80,13 @@ export function createDragController({ document, window, overlay, getTree, onCha
     event.preventDefault();
     const parent = findParent(getTree(), drag.id);
     const parentNode = parent || null;
-    const others = (parentNode ? parentNode.children : getTree()).filter((node) => node.id !== drag.id);
+    const parentEl = drag.node.el.parentNode || null;
+    const domSiblings = domSiblingsOf(drag.node);
+    const others = domSiblings || (parentNode ? parentNode.children : getTree()).filter((node) => node.id !== drag.id);
     const rects = others.map((node) => node.el.getBoundingClientRect());
     const index = computeInsertionIndex(rects, { x: event.clientX, y: event.clientY }, parentNode?.module?.layout || 'flow');
     drag.targetIndex = index;
-    overlay.showLine(lineRect(others, index, parentNode));
+    overlay.showLine(lineRect(others, index, parentEl || (parentNode ? parentNode.el : document.body)));
   }
 
   function onUp(event) {
@@ -76,10 +96,16 @@ export function createDragController({ document, window, overlay, getTree, onCha
     if (current.targetIndex < 0) return;
     const parent = findParent(getTree(), current.id);
     const parentNode = parent || null;
-    const parentEl = parentNode ? parentNode.el : (current.node.el.parentNode || document.body);
-    const others = (parentNode ? parentNode.children : getTree()).filter((node) => node.id !== current.id);
+    const domParent = current.node.el.parentNode || null;
+    const domChildren = domParent ? domModuleChildren(domParent) : null;
+    const parentEl = domParent || (parentNode ? parentNode.el : document.body);
+    const others = domChildren
+      ? domChildren.filter((node) => node.id !== current.id)
+      : (parentNode ? parentNode.children : getTree()).filter((node) => node.id !== current.id);
     const index = Math.max(0, Math.min(current.targetIndex, others.length));
-    const oldIndex = (parentNode ? parentNode.children : getTree()).findIndex((node) => node.id === current.id);
+    const oldIndex = domChildren
+      ? domChildren.findIndex((node) => node.id === current.id)
+      : (parentNode ? parentNode.children : getTree()).findIndex((node) => node.id === current.id);
     if (oldIndex === index) return;
     parentEl.insertBefore(current.node.el, others[index] ? others[index].el : null);
     onMoved({
