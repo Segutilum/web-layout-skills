@@ -1,4 +1,5 @@
 import { buildTree, heuristicManifest, serializeRoot } from './dom.js';
+import { createDragController } from './drag.js';
 import { createOverlay } from './overlay.js';
 
 const config = window.__WEB_LAYOUT__;
@@ -15,6 +16,7 @@ function boot(config) {
   let moved = [];
   let selected = '';
   let overlay = null;
+  let drag = null;
 
   const post = (message) => {
     try {
@@ -55,10 +57,19 @@ function boot(config) {
       overlay.setSelected(id);
       post({ type: 'select', id });
     },
-    onHandleDown: (id) => {
-      selected = id;
-      overlay.setSelected(id);
-      post({ type: 'select', id });
+    onHandleDown: (id, event) => drag.begin(id, event),
+  });
+
+  drag = createDragController({
+    document,
+    window,
+    overlay,
+    getTree: () => tree,
+    getManifest: () => manifest,
+    onChange: () => { build(); sendTree(); },
+    onMoved: (item) => {
+      moved = moved.filter((existing) => existing.module !== item.module);
+      moved.push(item);
     },
   });
 
