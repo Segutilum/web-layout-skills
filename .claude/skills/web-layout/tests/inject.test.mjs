@@ -36,3 +36,15 @@ test('does not inject the runtime twice', () => {
   const out = injectPreviewHtml(html, OPTS);
   assert.equal(out.match(/\/__layout\/runtime\.js/g).length, 1);
 });
+
+test('removes CSP and refresh meta tags when a preceding attribute contains >', () => {
+  const html = [
+    '<!doctype html><html><head>',
+    '<meta content="a>b" http-equiv="Content-Security-Policy">',
+    '<meta content="a>b" http-equiv="refresh">',
+    '</head><body></body></html>',
+  ].join('');
+  const out = injectPreviewHtml(html, OPTS);
+  assert.equal(/content-security-policy/i.test(out), false);
+  assert.equal(/http-equiv="refresh"/i.test(out), false);
+});

@@ -82,7 +82,13 @@ export async function serveStaticFile(req, res, { root, urlPath, editorOrigin, r
     if (!abs.startsWith(path.resolve(runtimeDir) + path.sep)) return notFound(res);
     let stat;
     try { stat = await fs.stat(abs); } catch { return notFound(res); }
-    if (!stat.isFile() || stat.size > MAX_FILE) return notFound(res);
+    if (!stat.isFile()) return notFound(res);
+    if (stat.size > MAX_FILE) {
+      res.statusCode = 413;
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.end('File too large');
+      return;
+    }
     setHeaders(res, editorOrigin, mimeOf(abs));
     if (req.method === 'HEAD') return res.end();
     streamFile(res, abs);

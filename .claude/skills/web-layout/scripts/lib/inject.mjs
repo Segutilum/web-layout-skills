@@ -1,6 +1,7 @@
 export function stripMeta(html, httpEquiv) {
+  const attrs = "(?:[^>\"']|\"[^\"]*\"|'[^']*')*";
   const re = new RegExp(
-    `<meta\\b[^>]*http-equiv\\s*=\\s*["']?${httpEquiv}["']?[^>]*>`,
+    '<meta\\b' + attrs + 'http-equiv\\s*=\\s*["\']?' + httpEquiv + '["\']?' + attrs + '>',
     'gi',
   );
   return String(html).replace(re, '');

@@ -8,14 +8,26 @@ import { serveStaticFile } from '../scripts/lib/static.mjs';
 
 const OPTS = { editorOrigin: 'http://127.0.0.1:5000', runtimeToken: 'abc' };
 
-async function withServer(root, fn) {
+async function withServer(root, fn, extra = {}) {
   const server = http.createServer((req, res) => {
-    serveStaticFile(req, res, { root, runtimeDir: path.resolve('.claude/skills/web-layout/editor/runtime'), ...OPTS })
+    serveStaticFile(req, res, { root, runtimeDir: path.resolve('.claude/skills/web-layout/editor/runtime'), ...OPTS, ...extra })
       .catch((error) => { res.statusCode = 500; res.end(String(error)); });
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const origin = `http://127.0.0.1:${server.address().port}`;
-  try { await fn(origin); } finally { await new Promise((resolve) => server.close(resolve)); }
+  const port = server.address().port;
+  const origin = `http://127.0.0.1:${port}`;
+  try { await fn(origin, port); } finally { await new Promise((resolve) => server.close(resolve)); }
+}
+
+function rawStatus(port, rawPath) {
+  return new Promise((resolve, reject) => {
+    const req = http.request({ host: '127.0.0.1', port, path: rawPath, method: 'GET' }, (res) => {
+      res.resume();
+      res.on('end', () => resolve(res.statusCode));
+    });
+    req.on('error', reject);
+    req.end();
+  });
 }
 
 async function fixtureRoot() {
@@ -54,9 +66,13 @@ test('rejects traversal, hidden files, and missing files', async () => {
   const root = await fixtureRoot();
   await fs.mkdir(path.join(root, '.hidden'));
   await fs.writeFile(path.join(root, '.hidden', 'secret.txt'), 'x');
-  await withServer(root, async (origin) => {
-    assert.equal((await fetch(origin + '/../secret')).status, 404);
-    assert.equal((await fetch(origin + '/%2e%2e/secret')).status, 404);
+  await fs.writeFile(path.join(root, 'secret'), 'must not be reachable via traversal');
+  await withServer(root, async (origin, port) => {
+    assert.equal(await rawStatus(port, '/styles.css'), 200);
+    assert.equal(await rawStatus(port, '/secret'), 200);
+    assert.equal(await rawStatus(port, '/../secret'), 404);
+    assert.equal(await rawStatus(port, '/%2e%2e/secret'), 404);
+    assert.equal(await rawStatus(port, '/%2e%2e%5csecret'), 404);
     assert.equal((await fetch(origin + '/.hidden/secret.txt')).status, 404);
     assert.equal((await fetch(origin + '/missing.css')).status, 404);
   });
@@ -70,4 +86,20 @@ test('serves runtime assets from the runtime directory', async () => {
     assert.match(res.headers.get('content-type'), /text\/javascript/);
     assert.match(await res.text(), /PALETTE/);
   });
+});
+
+test('returns 413 for runtime assets over 64 MiB', async () => {
+  const root = await fixtureRoot();
+  const runtimeDir = await fs.mkdtemp(path.join(os.tmpdir(), 'wl-runtime-'));
+  const big = path.join(runtimeDir, 'big.js');
+  await fs.writeFile(big, 'x');
+  await fs.truncate(big, 64 * 1024 * 1024 + 1);
+  try {
+    await withServer(root, async (origin) => {
+      const res = await fetch(origin + '/__layout/big.js');
+      assert.equal(res.status, 413);
+    }, { runtimeDir });
+  } finally {
+    await fs.rm(runtimeDir, { recursive: true, force: true });
+  }
 });
