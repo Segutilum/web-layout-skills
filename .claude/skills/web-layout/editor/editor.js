@@ -69,6 +69,12 @@ function renderPalette() {
   }
 }
 
+function selectedLabel(id) {
+  const index = moduleIndex(app.effectiveManifest || { modules: [] });
+  const mod = index.get(id);
+  return mod ? (mod.label || mod.id) : id;
+}
+
 function renderInspector() {
   ui.inspector.innerHTML = '';
   const title = document.createElement('h3');
@@ -82,7 +88,7 @@ function renderInspector() {
   } else {
     const muted = document.createElement('div');
     muted.className = 'muted';
-    muted.textContent = app.selectedId;
+    muted.textContent = selectedLabel(app.selectedId);
     ui.inspector.appendChild(muted);
   }
   const label = document.createElement('label');
