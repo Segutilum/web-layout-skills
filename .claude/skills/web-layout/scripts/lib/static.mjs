@@ -129,3 +129,28 @@ export async function serveStaticFile(req, res, { root, urlPath, editorOrigin, r
   if (req.method === 'HEAD') return res.end();
   streamFile(res, abs);
 }
+
+export async function serveEditorFile(req, res, { root, urlPath }) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.statusCode = 405;
+    res.end('Method not allowed');
+    return;
+  }
+  const abs = await resolveInsideRoot(root, urlPath === '/' ? '/index.html' : urlPath);
+  if (!abs) {
+    res.statusCode = 404;
+    res.end('Not found');
+    return;
+  }
+  let stat;
+  try { stat = await fs.stat(abs); } catch { res.statusCode = 404; res.end('Not found'); return; }
+  if (!stat.isFile()) { res.statusCode = 404; res.end('Not found'); return; }
+  res.setHeader('Content-Type', mimeOf(abs));
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
+  res.setHeader('Content-Length', stat.size);
+  if (req.method === 'HEAD') return res.end();
+  createReadStream(abs).pipe(res);
+}
