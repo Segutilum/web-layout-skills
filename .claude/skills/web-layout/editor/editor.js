@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { buildIntent, countChanges, hasDraft, validateForSubmit } from './state.js';
+import { buildIntent, countChanges, countLayoutHints, hasDraft, validateForSubmit } from './state.js';
 import { renderInspector as renderInspectorView } from './inspector.js';
 import { PALETTE } from './runtime/constants.js';
 
@@ -86,6 +86,8 @@ function renderInspector() {
 function renderSummary() {
   const counts = countChanges(app);
   ui.summary.textContent = '移动 ' + counts.moved + ' · 新增 ' + counts.added + ' · 删除 ' + counts.removed + ' · ' + counts.notes + ' 条备注';
+  const hints = countLayoutHints(app);
+  if (hints > 0) ui.summary.textContent += ' · 提示 ' + hints;
   const errors = validateForSubmit(app);
   ui.submit.disabled = app.submitted || errors.length > 0;
   if (errors.length && !app.submitted) {
@@ -207,6 +209,7 @@ window.addEventListener('message', (event) => {
     ]));
     app.removed = new Set(data.removed || []);
     app.moved = data.moved || [];
+    renderInspector();
     renderSummary();
   }
   if (data.type === 'select') {

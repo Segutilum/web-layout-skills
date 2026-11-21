@@ -36,9 +36,32 @@ export function countChanges({ moved, added, removed, notes }) {
   };
 }
 
+/**
+ * Number of modules with a non-default width/align hint. `auto` and `stretch`
+ * are the defaults the inspector shows, so on their own they are not edits.
+ * Hints for removed modules cannot reach the intent and do not count.
+ */
+export function countLayoutHints(state) {
+  const hints = (state && state.layoutHints) || {};
+  const removed = (state && state.removed) || new Set();
+  let count = 0;
+  for (const [id, hint] of Object.entries(hints)) {
+    if (removed.has(id)) continue;
+    const width = hint && hint.width;
+    const align = hint && hint.align;
+    if ((width && width !== 'auto') || (align && align !== 'stretch')) count += 1;
+  }
+  return count;
+}
+
+export function hasLayoutHints(state) {
+  return countLayoutHints(state) > 0;
+}
+
 export function hasDraft(state) {
   const changes = countChanges(state);
   return changes.moved + changes.added + changes.removed + changes.notes > 0
+    || hasLayoutHints(state)
     || String(state.globalNote || '').trim() !== '';
 }
 
@@ -49,7 +72,11 @@ export function validateForSubmit(state) {
   if (state.stale) errors.push('E_STALE');
   if ((state.unresolved || []).length) errors.push('E_UNRESOLVED');
   const changes = countChanges(state);
-  if (!changes.moved && !changes.added && !changes.removed && !changes.notes && !String(state.globalNote || '').trim()) {
+  if (
+    !changes.moved && !changes.added && !changes.removed && !changes.notes
+    && !hasLayoutHints(state)
+    && !String(state.globalNote || '').trim()
+  ) {
     errors.push('E_EMPTY_CHANGES');
   }
   return errors;

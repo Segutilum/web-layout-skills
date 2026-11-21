@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   widthAlignEnabled,
   countChanges,
+  countLayoutHints,
+  hasLayoutHints,
   hasDraft,
   validateForSubmit,
   buildIntent,
@@ -98,6 +100,65 @@ test('validateForSubmit rejects empty, stale, unresolved, and missing-page state
   assert.deepEqual(validateForSubmit({ ...base, stale: true, globalNote: 'x' }), ['E_STALE']);
   assert.deepEqual(validateForSubmit({ ...base, unresolved: [{ id: 'x' }], globalNote: 'x' }), ['E_UNRESOLVED']);
   assert.deepEqual(validateForSubmit({ ...base, page: '', globalNote: 'x' }), ['E_NO_PAGE']);
+});
+
+test('hint-only drafts are submit-ready', () => {
+  const base = {
+    page: 'index.html',
+    sourceVersion: 'sha256:' + 'a'.repeat(64),
+    styleVersion: 'sha256:' + 'b'.repeat(64),
+    stale: false,
+    unresolved: [],
+    tree,
+    moved: [],
+    added: new Map(),
+    removed: new Set(),
+    notes: {},
+    layoutHints: {},
+    globalNote: '',
+  };
+  const widthHint = { ...base, layoutHints: { hero: { width: 'full' } } };
+  const alignHint = { ...base, layoutHints: { hero: { align: 'start' } } };
+  const bothHints = { ...base, layoutHints: { hero: { width: 'half', align: 'center' }, header: { align: 'end' } } };
+  assert.equal(countLayoutHints(widthHint), 1);
+  assert.equal(hasLayoutHints(widthHint), true);
+  assert.equal(countLayoutHints(bothHints), 2);
+  assert.equal(hasDraft(widthHint), true);
+  assert.deepEqual(validateForSubmit(widthHint), []);
+  assert.equal(hasDraft(alignHint), true);
+  assert.deepEqual(validateForSubmit(alignHint), []);
+});
+
+test('default or removed layout hints do not count as changes', () => {
+  const base = {
+    page: 'index.html',
+    sourceVersion: 'sha256:' + 'a'.repeat(64),
+    styleVersion: 'sha256:' + 'b'.repeat(64),
+    stale: false,
+    unresolved: [],
+    tree,
+    moved: [],
+    added: new Map(),
+    removed: new Set(),
+    notes: {},
+    layoutHints: {},
+    globalNote: '',
+  };
+  const defaults = { width: 'auto', align: 'stretch' };
+  const defaultState = { ...base, layoutHints: { hero: defaults } };
+  assert.equal(countLayoutHints(defaultState), 0);
+  assert.equal(hasLayoutHints(defaultState), false);
+  assert.equal(hasDraft(defaultState), false);
+  assert.deepEqual(validateForSubmit(defaultState), ['E_EMPTY_CHANGES']);
+  assert.deepEqual(validateForSubmit({ ...base, layoutHints: { hero: { width: 'auto' } } }), ['E_EMPTY_CHANGES']);
+  assert.deepEqual(validateForSubmit({ ...base, layoutHints: { hero: { align: 'stretch' } } }), ['E_EMPTY_CHANGES']);
+
+  const removedHint = { ...base, removed: new Set(['hero']), layoutHints: { hero: { width: 'full' } } };
+  assert.equal(countLayoutHints(removedHint), 0);
+  assert.equal(hasLayoutHints(removedHint), false);
+  // The removal itself is a structural change; the stale hint must not add to it.
+  assert.equal(hasDraft(removedHint), true);
+  assert.deepEqual(validateForSubmit(removedHint), []);
 });
 
 test('moduleIndex and findParent walk the manifest and tree', () => {
