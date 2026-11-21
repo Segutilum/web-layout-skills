@@ -79,10 +79,7 @@ export function createDragController({ document, window, overlay, getTree, onCha
 
     const parent = findParent(getTree(), id);
     if (parent) {
-      const domSiblings = domOthers(parent.el, drag.id);
-      const others = domSiblings.length
-        ? domSiblings
-        : (parent.children || []).filter((child) => child.id !== drag.id);
+      const others = domOthers(parent.el, drag.id);
       return {
         parentId: parent.id,
         parentNode: parent,
@@ -98,10 +95,7 @@ export function createDragController({ document, window, overlay, getTree, onCha
 
     const domParent = node.el.parentNode;
     if (!domParent) return null;
-    const domSiblings = domOthers(domParent, drag.id);
-    const others = domSiblings.length
-      ? domSiblings
-      : getTree().filter((child) => child.id !== drag.id);
+    const others = domOthers(domParent, drag.id);
     return {
       parentId: '__root__',
       parentNode: null,
